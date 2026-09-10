@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Cardmarket Helper",
+  "version": "1.0.0",
+  "description": "Boutons rapides pour Cardmarket : passer le site en français et demander des photos au vendeur en un clic.",
+  "permissions": ["storage"],
+  "host_permissions": ["*://*.cardmarket.com/*"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.cardmarket.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "Cardmarket Helper : options",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "cardmarket-helper@local",
+      "strict_min_version": "115.0"
+    }
+  }
+}

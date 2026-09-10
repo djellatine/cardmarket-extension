@@ -1,0 +1,7 @@
+# Fichiers générés par le système
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Archives produites pour l'installation
+*.zip

@@ -1,0 +1,140 @@
+/* Cardmarket Helper - styles */
+
+#cmx-toolbar {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483000;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(20, 24, 33, 0.92);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+}
+
+.cmx-btn {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #2b3140;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background 0.15s, transform 0.1s;
+}
+.cmx-btn:hover:not(:disabled) {
+  background: #3a4256;
+}
+.cmx-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.cmx-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* État "rien à faire ici" : discret, mais toujours cliquable */
+.cmx-btn-done {
+  background: #23293a;
+  color: #9fb0c9;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.cmx-btn-done:hover {
+  background: #313a4f;
+}
+.cmx-btn-primary {
+  background: #1d6fe0;
+  border-color: #1d6fe0;
+}
+.cmx-btn-primary:hover:not(:disabled) {
+  background: #2a80f5;
+}
+.cmx-btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  padding: 6px 8px;
+  font-size: 18px;
+  line-height: 1;
+}
+.cmx-inline {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* Bouton "photos" présent sur chaque ligne d'annonce */
+.cmx-row-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  cursor: pointer;
+  color: #fff;
+  background: #1d6fe0;
+  vertical-align: middle;
+  flex: none;
+  transition: background 0.15s, transform 0.1s;
+}
+.cmx-row-btn:hover {
+  background: #2a80f5;
+}
+.cmx-row-btn:active {
+  transform: translateY(1px);
+}
+.cmx-row-btn svg {
+  display: block;
+  pointer-events: none;
+}
+
+/* Dans la colonne de droite, à la taille du bouton panier */
+.cmx-row-btn-lg {
+  width: 32px;
+  height: 30px;
+  margin-right: 6px;
+  border-radius: 6px;
+}
+
+/* Repli : petit bouton collé au nom du vendeur */
+.cmx-row-btn-sm {
+  width: 22px;
+  height: 20px;
+  margin-left: 6px;
+  border-radius: 5px;
+}
+
+/* Feedback visuel quand le texte est inséré */
+textarea.cmx-filled {
+  outline: 2px solid #1d6fe0 !important;
+  transition: outline 0.3s;
+}
+
+/* Notification */
+#cmx-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 80px;
+  transform: translate(-50%, 20px);
+  z-index: 2147483001;
+  max-width: 90vw;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #1d6fe0;
+  color: #fff;
+  font: 600 14px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+#cmx-toast.cmx-show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
