@@ -460,7 +460,16 @@
   }
 
   function actionAskPhotos(seller, sellerLink) {
-    const { texte: phrase, langue } = phrasePourVendeur(sellerLink);
+    let { texte: phrase, langue } = phrasePourVendeur(sellerLink);
+
+    // Sans ligne d'origine (bouton de la barre ou de la page profil), le pays est inconnu ici.
+    // Si la fiche produit a déjà tranché pour ce vendeur, on garde sa décision au lieu de
+    // l'écraser par un anglais par défaut.
+    const enCours = getIntent();
+    if (!sellerLink && enCours && enCours.phrase && (!seller || enCours.seller === seller)) {
+      phrase = enCours.phrase;
+      langue = enCours.langue || langue;
+    }
 
     // 1) Déjà sur un formulaire de message : on remplit directement.
     if (applyPhrase(phrase, { langue })) {
@@ -535,7 +544,16 @@
     btnHide.title = "Masquer la barre (jusqu'au prochain chargement)";
     btnHide.addEventListener("click", () => bar.remove());
 
-    bar.append(btnFr, btnPhotos, btnHide);
+    // Numéro de version : permet de vérifier d'un coup d'œil que l'extension rechargée est la bonne.
+    const version = document.createElement("span");
+    version.className = "cmx-version";
+    try {
+      version.textContent = "v" + chrome.runtime.getManifest().version;
+    } catch (e) {
+      version.textContent = "";
+    }
+
+    bar.append(btnFr, btnPhotos, version, btnHide);
     document.body.appendChild(bar);
   }
 
@@ -605,13 +623,26 @@
   }
 
   // sellerLink sert à retrouver le drapeau du pays du vendeur, donc la langue du message.
+  // Le pays est évalué dès la construction du bouton et affiché dessus (FR / EN) : on voit
+  // avant de cliquer dans quelle langue partira le message, et si le drapeau a été lu.
   function makePhotoButton(seller, big, sellerLink) {
+    const pays = sellerLink ? sellerPays(sellerLink) : "";
+    const langue = pays === "fr" ? "français" : "anglais";
+    const detail = pays ? "" : " (pays du vendeur non détecté)";
+
     const b = document.createElement("button");
     b.type = "button";
     b.className = big ? "cmx-row-btn cmx-row-btn-lg" : "cmx-row-btn cmx-row-btn-sm";
-    b.title = `Demander des photos à ${seller}`;
-    b.setAttribute("aria-label", `Demander des photos à ${seller}`);
+    b.dataset.pays = pays || "inconnu";
+    b.title = `Demander des photos à ${seller} — message en ${langue}${detail}`;
+    b.setAttribute("aria-label", b.title);
     b.appendChild(cameraIcon(big ? 18 : 13));
+    if (big) {
+      const badge = document.createElement("span");
+      badge.className = "cmx-lang";
+      badge.textContent = pays === "fr" ? "FR" : pays ? "EN" : "EN?";
+      b.appendChild(badge);
+    }
     b.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();

@@ -96,10 +96,41 @@
 
 /* Dans la colonne de droite, à la taille du bouton panier */
 .cmx-row-btn-lg {
-  width: 32px;
   height: 30px;
+  padding: 0 7px;
+  gap: 4px;
   margin-right: 6px;
   border-radius: 6px;
+}
+
+/* Langue du message qui partira, décidée d'après le drapeau du vendeur */
+.cmx-lang {
+  font: 700 10px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: 0.3px;
+}
+.cmx-row-btn[data-pays="fr"] {
+  background: #1d6fe0;
+}
+.cmx-row-btn[data-pays="autre"] {
+  background: #3d4a63;
+}
+.cmx-row-btn[data-pays="autre"]:hover {
+  background: #4b5a78;
+}
+/* Drapeau non lu : couleur d'alerte, pour que ça se voie tout de suite */
+.cmx-row-btn[data-pays="inconnu"] {
+  background: #b8651b;
+}
+.cmx-row-btn[data-pays="inconnu"]:hover {
+  background: #d0752a;
+}
+
+/* Numéro de version dans la barre */
+.cmx-version {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11px;
+  padding: 0 2px;
+  user-select: none;
 }
 
 /* Repli : petit bouton collé au nom du vendeur */
