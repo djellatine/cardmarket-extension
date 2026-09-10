@@ -10,6 +10,9 @@ Extension Chrome / Edge / Brave (Manifest V3) qui ajoute des boutons rapides sur
   est-ce possible ? S'il vous plaît. »
   Le repère `{carte}` de la phrase (modifiable dans les options) est remplacé par la carte de la page
   et son édition, lus dans le titre de la fiche produit ou, à défaut, dans l'adresse.
+  **La langue s'adapte au vendeur** : le drapeau affiché devant son nom donne son pays. Vendeur en
+  France → message français ; partout ailleurs, et si le drapeau n'est pas reconnu → message anglais.
+  La notification indique la langue employée, et signale le cas « pays non détecté ».
 - Un bouton **photo** bleu sur chaque ligne d'annonce, juste à gauche du bouton panier : un clic ouvre
   le profil du vendeur, suit le lien « Envoyer un message » et pré-remplit le texte.
   Si la colonne de droite est introuvable, le bouton se replie à côté du nom du vendeur.

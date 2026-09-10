@@ -5,3 +5,7 @@ desktop.ini
 
 # Archives produites pour l'installation
 *.zip
+
+# Copie d'une page Cardmarket, gardée en local pour vérifier les sélecteurs.
+# Non publiée : c'est le contenu d'un autre site.
+reference/

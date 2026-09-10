@@ -50,11 +50,17 @@
   <h1>Cardmarket Helper</h1>
   <p class="sub">Réglages des boutons rapides.</p>
 
-  <label for="phrase">Message envoyé au vendeur</label>
+  <label for="phrase">Message aux vendeurs français</label>
   <textarea id="phrase"></textarea>
   <p class="hint">Écris <code>{carte}</code> là où tu veux le nom de la carte : il est remplacé
     automatiquement par la carte de la page, avec son édition — par exemple
     <em>Groudon (L'Appel des Légendes)</em>. Si le nom ne peut pas être lu, la phrase dit « cette carte ».</p>
+
+  <label for="phraseEn">Message aux vendeurs étrangers</label>
+  <textarea id="phraseEn"></textarea>
+  <p class="hint">Le pays du vendeur est lu sur le drapeau affiché devant son nom. Vendeur en France :
+    message français. Autre pays : ce message-ci. Drapeau illisible : les deux, l'un sous l'autre.
+    Le repère <code>{carte}</code> fonctionne pareil.</p>
 
   <label class="check">
     <input type="checkbox" id="rowButtons">

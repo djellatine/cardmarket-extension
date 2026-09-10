@@ -13,6 +13,8 @@
   const DEFAULTS = {
     phrase:
       "Bonjour, j'aimerais avoir des photos de la carte {carte}, avant et arrière, est-ce possible ? S'il vous plaît.",
+    phraseEn:
+      "Hello, could I please have photos of the card {carte}, front and back? Thank you very much.",
     autoSend: false,
     rowButtons: true,
   };
@@ -109,6 +111,18 @@
     return decodeURIComponent(slug || "").replace(/-/g, " ").trim();
   }
 
+  // Texte propre à un élément, sans celui de ses enfants : le titre d'une fiche produit
+  // contient un sous-titre (l'édition) qu'il ne faut pas recopier dans le nom de la carte.
+  function texteDirect(el) {
+    const t = [...el.childNodes]
+      .filter((n) => n.nodeType === Node.TEXT_NODE)
+      .map((n) => n.textContent)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return t || el.textContent.replace(/\s+/g, " ").trim();
+  }
+
   // Nom de la carte affiché par la page, donc en français. Le titre du site est écarté,
   // ainsi qu'un titre situé dans l'en-tête ou le menu.
   function cardNameFromDom() {
@@ -116,23 +130,27 @@
       document.querySelector('main h1, [role="main"] h1, #content h1, .page-title-container h1') ||
       document.querySelector("h1");
     if (!h1 || h1.closest("header, nav")) return "";
-    const t = h1.textContent.replace(/\s+/g, " ").trim();
+    const t = texteDirect(h1);
     if (!t || t.length > 80 || /^cardmarket$/i.test(t)) return "";
     return t;
   }
 
-  // Nom français de l'édition, pris sur le lien qui pointe vers cette édition précise.
-  // On exige que l'adresse du lien se termine par l'identifiant d'édition de la page courante :
-  // impossible d'attraper le nom d'une autre extension au passage.
+  // Nom traduit de l'édition, pris sur le lien « Édité dans » de la fiche :
+  //   <a href="/fr/Pokemon/Expansions/151" class="mb-2">151</a>
+  // On exige que l'adresse se termine par l'identifiant d'édition de la page courante, et que
+  // le lien porte du texte : le premier lien vers l'édition n'est qu'une icône, sans nom.
   function editionNameFromDom(slug) {
     if (!slug) return "";
     const echappe = slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const rx = new RegExp("/Products/Singles/" + echappe + "/?$", "i");
-    const link = [...document.querySelectorAll('a[href*="/Products/Singles/"]')].find((a) =>
-      rx.test((a.getAttribute("href") || "").split(/[?#]/)[0])
-    );
-    const t = link ? link.textContent.replace(/\s+/g, " ").trim() : "";
-    return t && t.length <= 60 ? t : "";
+    const rx = new RegExp("/Expansions/" + echappe + "/?$", "i");
+    for (const a of document.querySelectorAll('a[href*="/Expansions/"]')) {
+      if (!rx.test((a.getAttribute("href") || "").split(/[?#]/)[0])) continue;
+      let t = a.textContent.replace(/\s+/g, " ").trim();
+      // Cardmarket suffixe parfois le nom par le type de produit : « … - Cartes ».
+      t = t.replace(/\s*[-–—]\s*(cartes?|cards?|karten|carte|cartas|singles)\s*$/i, "").trim();
+      if (t && t.length <= 60) return t;
+    }
+    return "";
   }
 
   // Numéro de la carte, lu sur la ligne "Nombre" de la fiche. Cardmarket n'y met que le numéro
@@ -160,13 +178,123 @@
     const edition = editionNameFromDom(rest[2]) || slugEnTexte(rest[2]);
     if (!nom) return "";
 
-    // Cardmarket met souvent déjà le numéro dans le nom (« Rayquaza (DX 22) ») : on ne le répète pas.
+    // Cardmarket suffixe le nom par son code interne : « Groudon ex (NP 38) », « Rayquaza (DX 22) ».
+    // Ce n'est pas le numéro imprimé sur la carte, on le remplace par celui de la fiche.
+    // L'espace entre les lettres et les chiffres est exigé pour ne pas toucher aux mentions
+    // de version, « (V1) », qui distinguent deux illustrations d'une même carte.
     const numero = cardNumberFromDom();
-    if (numero && !nom.includes(numero)) nom = `${nom} n° ${numero}`;
+    if (numero) {
+      nom = nom.replace(/\s*\([A-Za-z]{1,5}\s+\d{1,4}[a-z]?\)\s*$/, "").trim();
+      if (!nom.includes(numero)) nom = `${nom} n° ${numero}`;
+    }
 
     // Le nom contient parfois déjà l'édition : on évite de la répéter.
     if (edition && !nom.toLowerCase().includes(edition.toLowerCase())) return `${nom} (${edition})`;
     return nom;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pays du vendeur
+  // ---------------------------------------------------------------------------
+  // Cardmarket n'expose aucun code pays : le drapeau est une image-sprite, et le seul indice
+  // est l'infobulle, qui contient le pays dans une phrase (title="Item location: Italy",
+  // « Localisation de l'article : Italie »). On cherche donc le nom du pays à l'intérieur du
+  // texte, entouré de caractères non alphabétiques pour ne pas confondre Chine et Chinese.
+  function motDansTexte(noms) {
+    return new RegExp("(^|[^\\p{L}])(" + noms + ")([^\\p{L}]|$)", "iu");
+  }
+
+  const FRANCE = motDansTexte("france|frankreich|francia|frança|francja|frankrijk");
+
+  // Noms de pays tels que Cardmarket peut les afficher en infobulle, dans les langues du site.
+  // Sert uniquement à reconnaître qu'une infobulle désigne bien un pays : ce qui n'est pas
+  // la France est traité comme étranger, sans qu'il soit utile de savoir lequel.
+  const PAYS_CONNUS = motDansTexte(
+    "allemagne|deutschland|germany|italie|italy|italia|espagne|spanien|spain|españa|belgique|belgien|belgium|belgië|pays-bas|niederlande|netherlands|nederland|portugal|autriche|österreich|austria|pologne|polen|poland|polska|royaume-uni|vereinigtes königreich|united kingdom|great britain|grande-bretagne|angleterre|england|irlande|ireland|irland|danemark|dänemark|denmark|suède|schweden|sweden|finlande|finnland|finland|norvège|norwegen|norway|suisse|schweiz|switzerland|svizzera|grèce|griechenland|greece|hongrie|ungarn|hungary|tchéquie|république tchèque|tschechien|czech republic|czechia|slovaquie|slowakei|slovakia|slovénie|slowenien|slovenia|croatie|kroatien|croatia|roumanie|rumänien|romania|bulgarie|bulgarien|bulgaria|lituanie|litauen|lithuania|lettonie|lettland|latvia|estonie|estland|estonia|luxembourg|luxemburg|malte|malta|chypre|zypern|cyprus|japon|japan|états-unis|etats-unis|usa|united states|vereinigte staaten|canada|kanada|australie|australia|singapour|singapore|hong kong|chine|china|corée du sud|corée|south korea|brésil|brazil|brasilien|mexique|mexico|turquie|türkei|turkey|ukraine|serbie|serbia|islande|iceland|andorre|andorra|monaco|liechtenstein|saint-marin|san marino|israël|israel|thaïlande|thailand|taïwan|taiwan|philippines|indonésie|indonesia|malaisie|malaysia|inde|india|nouvelle-zélande|new zealand|afrique du sud|south africa|argentine|argentina|chili|chile|colombie|colombia|pérou|peru|russie|russland|russia|biélorussie|belarus|moldavie|moldova|bosnie-herzégovine|bosnia|macédoine|macedonia|albanie|albania|monténégro|montenegro|kosovo|géorgie|georgia|arménie|armenia"
+  );
+
+  function codeVersPays(code) {
+    if (!code) return "";
+    return code.toLowerCase() === "fr" ? "fr" : "autre";
+  }
+
+  // Reconnaît une pastille de drapeau, quelle que soit la façon dont Cardmarket la dessine :
+  // image, sprite SVG, classe css, ou simple infobulle portant le nom du pays.
+  // Renvoie "fr", "autre", ou "" si l'élément n'est pas un drapeau.
+  function paysDe(el) {
+    if (!el.getAttribute) return "";
+
+    const chemin =
+      el.getAttribute("src") ||
+      el.getAttribute("data-src") ||
+      el.getAttribute("href") ||
+      el.getAttribute("xlink:href") ||
+      "";
+    let m = chemin.match(/(?:flags?|icons?)[/_-]([a-z]{2})(?:[.\-_@]|$)/i) || chemin.match(/#flag[-_]?([a-z]{2})$/i);
+    if (m) return codeVersPays(m[1]);
+
+    // getAttribute plutôt que .className : sur un élément SVG, className n'est pas une chaîne.
+    const classes = el.getAttribute("class") || "";
+    m = classes.match(/(?:^|[\s_-])(?:flag|fi|country)[-_]?(?:icon[-_]?)?([a-z]{2})(?:$|[\s_-])/i);
+    if (m) return codeVersPays(m[1]);
+
+    for (const attr of ["data-country", "data-country-code", "data-iso", "data-flag"]) {
+      const v = (el.getAttribute(attr) || "").trim();
+      if (/^[a-z]{2}$/i.test(v)) return codeVersPays(v);
+    }
+
+    // Infobulle de la pastille : « Item location: Italy », « Localisation de l'article : Italie ».
+    // Le texte propre de l'élément est aussi examiné, au cas où le pays serait dans une
+    // étiquette masquée à l'écran mais présente dans le code.
+    const textes = ["title", "aria-label", "alt", "data-original-title", "data-bs-original-title"]
+      .map((a) => el.getAttribute(a) || "")
+      .concat(el.children.length <= 1 ? [texteDirect(el)] : []);
+    for (const brut of textes) {
+      const v = brut.replace(/\s+/g, " ").trim();
+      if (!v) continue;
+      // Le pays est ce qui suit le dernier deux-points : « Localisation de l'article: Belgique ».
+      // Indispensable, car la ligne porte aussi une infobulle de livraison qui cite deux pays,
+      // « Délai moyen de livraison de Belgique vers France : 6 jours » : y chercher un nom de
+      // pays au hasard ferait passer tous les vendeurs pour des Français.
+      const fin = v.split(/\s*:\s*/).pop().trim();
+      if (!fin || fin.length > 40) continue;
+      if (FRANCE.test(fin)) return "fr";
+      if (PAYS_CONNUS.test(fin)) return "autre";
+    }
+    return "";
+  }
+
+  // Le drapeau du pays du vendeur précède son nom dans la ligne. On ne regarde donc que ce qui
+  // est situé avant le lien : la ligne contient aussi le drapeau de la langue de la carte,
+  // et l'en-tête du site contient le sélecteur de langue.
+  function chercherPays(scope, link) {
+    if (!scope) return "";
+    for (const el of scope.querySelectorAll("*")) {
+      if (!(link.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING)) continue;
+      const pays = paysDe(el);
+      if (pays) return pays;
+    }
+    return "";
+  }
+
+  // On tente d'abord la cellule du vendeur ; si elle est introuvable ou trop étroite pour
+  // contenir le drapeau, on repasse sur la ligne entière. Se limiter à ce qui précède le nom
+  // suffit à écarter le drapeau de la langue de la carte, qui vient après.
+  function sellerPays(link) {
+    const cellule =
+      link.closest('[class*="col-seller"], [class*="seller-info"]') ||
+      (link.closest(".seller-name") || link).parentElement;
+    return chercherPays(cellule, link) || chercherPays(rowFor(link), link);
+  }
+
+  // Français au vendeur français, anglais partout ailleurs. Pays illisible : anglais aussi,
+  // qui est la langue d'échange du site.
+  function phrasePourVendeur(link) {
+    const carte = currentCardLabel();
+    const pays = link ? sellerPays(link) : "";
+    if (pays === "fr") return { texte: resolvePhrase(settings.phrase, carte), langue: "français" };
+    const en = resolvePhrase(settings.phraseEn || DEFAULTS.phraseEn, carte);
+    return { texte: en, langue: pays ? "anglais" : "anglais (pays du vendeur non détecté)" };
   }
 
   // Remplace {carte} par le nom de la carte ; sans carte identifiée, la phrase reste correcte.
@@ -181,8 +309,8 @@
   // ---------------------------------------------------------------------------
   // La phrase est résolue ici, sur la fiche produit, tant que le nom de la carte est connu :
   // la page du message, elle, ne sait plus de quelle carte il s'agit.
-  function setIntent(seller, phrase) {
-    sessionStorage.setItem(INTENT_KEY, JSON.stringify({ seller, phrase, ts: Date.now() }));
+  function setIntent(seller, phrase, langue) {
+    sessionStorage.setItem(INTENT_KEY, JSON.stringify({ seller, phrase, langue, ts: Date.now() }));
   }
 
   function getIntent() {
@@ -284,15 +412,21 @@
   }
 
   // Remplit le formulaire (et envoie si l'option est activée). Retourne true si un textarea a été trouvé.
-  function applyPhrase(phrase, { send } = { send: settings.autoSend }) {
+  function applyPhrase(phrase, { send, langue } = {}) {
     const ta = findMessageTextarea();
     if (!ta) return false;
     fillTextarea(ta, phrase);
-    if (send) {
+    const envoyer = send === undefined ? settings.autoSend : send;
+    const en = langue ? ` en ${langue}` : "";
+    if (envoyer) {
       const ok = submitForm(ta);
-      toast(ok ? "Message envoyé au vendeur." : "Texte inséré, mais bouton d'envoi introuvable : clique sur Envoyer.");
+      toast(
+        ok
+          ? `Message envoyé au vendeur${en}.`
+          : `Texte inséré${en}, mais bouton d'envoi introuvable : clique sur Envoyer.`
+      );
     } else {
-      toast("Texte inséré. Vérifie et clique sur Envoyer.");
+      toast(`Texte inséré${en}. Vérifie et clique sur Envoyer.`);
     }
     return true;
   }
@@ -325,11 +459,11 @@
     location.href = u.toString();
   }
 
-  function actionAskPhotos(seller) {
-    const phrase = resolvePhrase(settings.phrase, currentCardLabel());
+  function actionAskPhotos(seller, sellerLink) {
+    const { texte: phrase, langue } = phrasePourVendeur(sellerLink);
 
     // 1) Déjà sur un formulaire de message : on remplit directement.
-    if (applyPhrase(phrase)) {
+    if (applyPhrase(phrase, { langue })) {
       clearIntent();
       return;
     }
@@ -337,7 +471,7 @@
     // 2) Sur la page profil d'un vendeur : on suit le lien "Envoyer un message".
     const profileSeller = sellerFromProfilePath();
     if (profileSeller && (!seller || seller === profileSeller)) {
-      setIntent(profileSeller, phrase);
+      setIntent(profileSeller, phrase, langue);
       const link = findSendMessageLink();
       if (link) {
         link.click();
@@ -351,7 +485,7 @@
 
     // 3) Depuis une fiche produit : on mémorise le vendeur et on va sur son profil.
     if (seller) {
-      setIntent(seller, phrase);
+      setIntent(seller, phrase, langue);
       location.href = profileUrl(seller);
       return;
     }
@@ -470,7 +604,8 @@
     return buttons.length ? buttons[buttons.length - 1] : null;
   }
 
-  function makePhotoButton(seller, big) {
+  // sellerLink sert à retrouver le drapeau du pays du vendeur, donc la langue du message.
+  function makePhotoButton(seller, big, sellerLink) {
     const b = document.createElement("button");
     b.type = "button";
     b.className = big ? "cmx-row-btn cmx-row-btn-lg" : "cmx-row-btn cmx-row-btn-sm";
@@ -480,7 +615,7 @@
     b.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      actionAskPhotos(seller);
+      actionAskPhotos(seller, sellerLink);
     });
     return b;
   }
@@ -506,13 +641,13 @@
 
       // Cible : dans la colonne de droite, juste avant le bouton panier.
       if (cart && cart.parentElement) {
-        const btn = makePhotoButton(seller, true);
+        const btn = makePhotoButton(seller, true, a);
         cart.parentElement.insertBefore(btn, cart);
         placed.push({ btn, link: a, seller });
         return;
       }
       // Repli : si la colonne de droite est introuvable, à côté du nom du vendeur.
-      a.insertAdjacentElement("afterend", makePhotoButton(seller, false));
+      a.insertAdjacentElement("afterend", makePhotoButton(seller, false, a));
     });
 
     // Vérification après coup : un bouton qui n'occupe aucun pixel a atterri dans un conteneur
@@ -521,7 +656,7 @@
     placed.forEach(({ btn, link, seller }) => {
       if (btn.getClientRects().length) return;
       btn.remove();
-      link.insertAdjacentElement("afterend", makePhotoButton(seller, false));
+      link.insertAdjacentElement("afterend", makePhotoButton(seller, false, link));
     });
   }
 
@@ -551,7 +686,7 @@
 
     // Sur un formulaire de message : remplir.
     if (findMessageTextarea()) {
-      applyPhrase(intent.phrase || resolvePhrase(settings.phrase, currentCardLabel()));
+      applyPhrase(intent.phrase || phrasePourVendeur(null).texte, { langue: intent.langue });
       clearIntent();
       return;
     }
