@@ -125,6 +125,62 @@
   background: #d0752a;
 }
 
+/* Vendeur déjà sollicité pour cette carte : pastille ✓ dans le coin du bouton.
+   Verte si le message est parti, grise si le texte a seulement été inséré. */
+.cmx-row-btn-deja {
+  position: relative;
+}
+.cmx-deja {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  background: #1f9a55;
+  color: #fff;
+  font: 700 9px/12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  text-align: center;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+.cmx-deja[data-statut="insere"] {
+  background: #7a8599;
+}
+.cmx-row-btn-sm .cmx-deja {
+  top: -5px;
+  right: -5px;
+  width: 12px;
+  height: 12px;
+  font-size: 7px;
+  line-height: 9px;
+}
+
+/* Ancienneté de l'annonce, à côté du nom du vendeur.
+   Couleur : rang parmi les offres de la page ; texte : date estimée, sinon le rang en toutes lettres. */
+.cmx-age {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  margin: 0 4px 0 2px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: #eef1f6;
+  color: #5b6475;
+  font: 600 11px/16px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  white-space: nowrap;
+  cursor: help;
+}
+.cmx-age[data-age="recente"] {
+  background: #e3f5ea;
+  color: #17783f;
+}
+.cmx-age[data-age="ancienne"] {
+  background: #fdf0dc;
+  color: #9a5a12;
+}
+
 /* Numéro de version dans la barre */
 .cmx-version {
   color: rgba(255, 255, 255, 0.45);

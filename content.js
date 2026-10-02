@@ -17,6 +17,7 @@
       "Hello, could I please have photos of the card {carte}, front and back? Thank you very much.",
     autoSend: false,
     rowButtons: true,
+    ageBadges: true,
   };
 
   // Phrase de la version précédente, sans nom de carte : remplacée automatiquement
@@ -57,7 +58,11 @@
 
   try {
     if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged) {
-      chrome.storage.onChanged.addListener((changes) => {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === "local") {
+          majDemandes(changes);
+          return;
+        }
         for (const k of Object.keys(changes)) settings[k] = changes[k].newValue;
       });
     }
@@ -89,6 +94,13 @@
 
   function isMessagePage() {
     return /\/Messages(\/|$)/i.test(location.pathname);
+  }
+
+  // /fr/Pokemon/Messages/<vendeur> : sert de filet quand l'intention ne nomme pas le vendeur.
+  function sellerFromMessagePath() {
+    const { rest } = parsePath();
+    if (/^Messages?$/i.test(rest[0] || "") && rest[1]) return decodeURIComponent(rest[1]);
+    return null;
   }
 
   function frenchUrl() {
@@ -305,12 +317,132 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Suivi des demandes déjà faites (chrome.storage.local)
+  // ---------------------------------------------------------------------------
+  // Une entrée par couple vendeur + carte, sous sa propre clé : l'écriture se fait en un seul
+  // appel, sans relire la liste, ce qui lui laisse le temps d'aboutir quand l'envoi du
+  // formulaire fait quitter la page.
+  //   statut "insere" : texte placé dans le message ; "envoye" : formulaire envoyé.
+  const DEMANDE_PREFIX = "cmx_d:";
+  const DEMANDE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // au-delà de 90 jours, une demande est oubliée
+
+  const demandes = {};
+
+  // Carte de la fiche produit en cours, identifiée par son adresse sans la langue du site
+  // ni les filtres : la même carte vue en /fr/ ou en /en/ donne la même clé.
+  function cleCarte() {
+    if (!isProductPage()) return "";
+    const { game, rest } = parsePath();
+    return [game, ...rest.slice(1)].join("/").toLowerCase();
+  }
+
+  function carteCourante() {
+    if (!isProductPage()) return null;
+    return {
+      cle: cleCarte(),
+      nom: currentCardLabel(),
+      url: location.origin + location.pathname,
+    };
+  }
+
+  function cleDemande(seller, carte) {
+    return DEMANDE_PREFIX + String(seller).toLowerCase() + "|" + ((carte && carte.cle) || "");
+  }
+
+  function storageLocal() {
+    try {
+      if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) return chrome.storage.local;
+    } catch (e) {
+      /* contexte d'extension invalidé (extension rechargée) */
+    }
+    return null;
+  }
+
+  function chargerDemandes() {
+    return new Promise((resolve) => {
+      const st = storageLocal();
+      if (!st) return resolve();
+      st.get(null, (items) => {
+        const perimees = [];
+        for (const [k, v] of Object.entries(items || {})) {
+          if (k === REPERES_KEY && v) {
+            Object.assign(reperes, v);
+            nettoyerReperes();
+          }
+          if (!k.startsWith(DEMANDE_PREFIX)) continue;
+          if (!v || Date.now() - v.ts > DEMANDE_TTL_MS) perimees.push(k);
+          else demandes[k] = v;
+        }
+        if (perimees.length) st.remove(perimees);
+        resolve();
+      });
+    });
+  }
+
+  function majDemandes(changes) {
+    let touche = false;
+    for (const [k, c] of Object.entries(changes)) {
+      if (!k.startsWith(DEMANDE_PREFIX)) continue;
+      if (c.newValue) demandes[k] = c.newValue;
+      else delete demandes[k];
+      touche = true;
+    }
+    if (touche) document.querySelectorAll(".cmx-row-btn").forEach(marquerBouton);
+  }
+
+  // Un envoi confirmé n'est jamais rétrogradé en simple insertion.
+  function enregistrerDemande(demande, statut) {
+    if (!demande || !demande.seller) return;
+    const cle = cleDemande(demande.seller, demande.carte);
+    if (statut === "insere" && demandes[cle] && demandes[cle].statut === "envoye") return;
+    const carte = demande.carte || {};
+    const entree = {
+      seller: demande.seller,
+      carte: carte.nom || "",
+      carteUrl: carte.url || "",
+      profil: profileUrl(demande.seller),
+      langue: demande.langue || "",
+      statut,
+      ts: Date.now(),
+    };
+    demandes[cle] = entree;
+    const st = storageLocal();
+    if (st) st.set({ [cle]: entree });
+  }
+
+  // Le texte inséré n'est pas forcément envoyé : on attend l'envoi du formulaire pour le noter.
+  // Le clic sur le bouton d'envoi est surveillé aussi, au cas où le site enverrait le message
+  // en JavaScript sans déclencher l'événement submit. Écouté en phase de capture, il passe
+  // avant les gestionnaires du site.
+  function suivreEnvoi(textarea, demande) {
+    const form = textarea.closest("form");
+    if (!form || form.dataset.cmxSuivi) return;
+    form.dataset.cmxSuivi = "1";
+    const noter = () => {
+      if (textarea.value.trim()) enregistrerDemande(demande, "envoye");
+    };
+    form.addEventListener("submit", noter, true);
+    form.addEventListener(
+      "click",
+      (ev) => {
+        if (ev.target.closest('button[type="submit"], input[type="submit"], button:not([type])')) noter();
+      },
+      true
+    );
+  }
+
+  function dateCourte(ts) {
+    return new Date(ts).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+  }
+
+  // ---------------------------------------------------------------------------
   // Intention "demander des photos" (survit à la navigation via sessionStorage)
   // ---------------------------------------------------------------------------
   // La phrase est résolue ici, sur la fiche produit, tant que le nom de la carte est connu :
-  // la page du message, elle, ne sait plus de quelle carte il s'agit.
-  function setIntent(seller, phrase, langue) {
-    sessionStorage.setItem(INTENT_KEY, JSON.stringify({ seller, phrase, langue, ts: Date.now() }));
+  // la page du message, elle, ne sait plus de quelle carte il s'agit. La carte voyage donc
+  // avec l'intention, pour le suivi des demandes.
+  function setIntent(seller, phrase, langue, carte) {
+    sessionStorage.setItem(INTENT_KEY, JSON.stringify({ seller, phrase, langue, carte, ts: Date.now() }));
   }
 
   function getIntent() {
@@ -412,14 +544,22 @@
   }
 
   // Remplit le formulaire (et envoie si l'option est activée). Retourne true si un textarea a été trouvé.
-  function applyPhrase(phrase, { send, langue } = {}) {
+  // demande : { seller, carte, langue }, pour le suivi des demandes.
+  function applyPhrase(phrase, { send, langue, demande } = {}) {
     const ta = findMessageTextarea();
     if (!ta) return false;
     fillTextarea(ta, phrase);
+    if (demande && !demande.seller) demande.seller = sellerFromMessagePath();
+    if (demande && demande.seller) {
+      demande.langue = langue;
+      enregistrerDemande(demande, "insere");
+      suivreEnvoi(ta, demande);
+    }
     const envoyer = send === undefined ? settings.autoSend : send;
     const en = langue ? ` en ${langue}` : "";
     if (envoyer) {
       const ok = submitForm(ta);
+      if (ok) enregistrerDemande(demande, "envoye");
       toast(
         ok
           ? `Message envoyé au vendeur${en}.`
@@ -466,13 +606,16 @@
     // Si la fiche produit a déjà tranché pour ce vendeur, on garde sa décision au lieu de
     // l'écraser par un anglais par défaut.
     const enCours = getIntent();
+    let carte = carteCourante();
     if (!sellerLink && enCours && enCours.phrase && (!seller || enCours.seller === seller)) {
       phrase = enCours.phrase;
       langue = enCours.langue || langue;
+      carte = carte || enCours.carte || null;
     }
 
     // 1) Déjà sur un formulaire de message : on remplit directement.
-    if (applyPhrase(phrase, { langue })) {
+    const demande = { seller: seller || (enCours && enCours.seller) || null, carte };
+    if (applyPhrase(phrase, { langue, demande })) {
       clearIntent();
       return;
     }
@@ -480,7 +623,7 @@
     // 2) Sur la page profil d'un vendeur : on suit le lien "Envoyer un message".
     const profileSeller = sellerFromProfilePath();
     if (profileSeller && (!seller || seller === profileSeller)) {
-      setIntent(profileSeller, phrase, langue);
+      setIntent(profileSeller, phrase, langue, carte);
       const link = findSendMessageLink();
       if (link) {
         link.click();
@@ -494,7 +637,7 @@
 
     // 3) Depuis une fiche produit : on mémorise le vendeur et on va sur son profil.
     if (seller) {
-      setIntent(seller, phrase, langue);
+      setIntent(seller, phrase, langue, carte);
       location.href = profileUrl(seller);
       return;
     }
@@ -634,8 +777,8 @@
     b.type = "button";
     b.className = big ? "cmx-row-btn cmx-row-btn-lg" : "cmx-row-btn cmx-row-btn-sm";
     b.dataset.pays = pays || "inconnu";
-    b.title = `Demander des photos à ${seller} — message en ${langue}${detail}`;
-    b.setAttribute("aria-label", b.title);
+    b.dataset.seller = seller;
+    b.dataset.titre = `Demander des photos à ${seller} — message en ${langue}${detail}`;
     b.appendChild(cameraIcon(big ? 18 : 13));
     if (big) {
       const badge = document.createElement("span");
@@ -643,12 +786,36 @@
       badge.textContent = pays === "fr" ? "FR" : pays ? "EN" : "EN?";
       b.appendChild(badge);
     }
+    marquerBouton(b);
     b.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       actionAskPhotos(seller, sellerLink);
     });
     return b;
+  }
+
+  // Pastille ✓ sur le bouton d'un vendeur déjà sollicité pour cette carte. Le bouton reste
+  // utilisable : relancer un vendeur qui n'a pas répondu est un choix légitime.
+  function marquerBouton(b) {
+    const d = demandes[cleDemande(b.dataset.seller, { cle: cleCarte() })];
+    let pastille = b.querySelector(".cmx-deja");
+    b.classList.toggle("cmx-row-btn-deja", !!d);
+    if (d) {
+      if (!pastille) {
+        pastille = document.createElement("span");
+        pastille.className = "cmx-deja";
+        pastille.textContent = "✓";
+        b.appendChild(pastille);
+      }
+      pastille.dataset.statut = d.statut;
+      const etat = d.statut === "envoye" ? "message envoyé" : "texte inséré, envoi non confirmé";
+      b.title = `${b.dataset.titre}\nDéjà demandé le ${dateCourte(d.ts)} (${etat})`;
+    } else {
+      if (pastille) pastille.remove();
+      b.title = b.dataset.titre;
+    }
+    b.setAttribute("aria-label", b.title);
   }
 
   function decorateSellerRows() {
@@ -691,6 +858,142 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Ancienneté des annonces (fiches produit)
+  // ---------------------------------------------------------------------------
+  // Cardmarket n'affiche pas la date de mise en vente. Chaque ligne porte en revanche le numéro
+  // de l'annonce (id="articleRow2102771147"), attribué dans l'ordre de création : plus il est
+  // petit, plus l'annonce est ancienne. Deux usages :
+  //   - comparer les offres de la page entre elles (récente / moyenne / ancienne) ;
+  //   - dater approximativement, grâce à des repères « tel jour, les numéros allaient jusqu'à N ».
+  // Les repères se constituent tout seuls : chaque jour, l'extension note le plus grand numéro
+  // vu. Tant qu'aucun jour passé n'est connu, la pastille ne donne que le rang.
+  // Limite : une annonce modifiée a peut-être reçu un nouveau numéro, la date est alors celle
+  // de la modification.
+  const REPERES_KEY = "cmx_reperes";
+  const reperes = {};
+
+  // Repère de la version 1.3.0, tiré d'une page enregistrée et non d'une observation : trop
+  // approximatif, il est retiré des données déjà stockées.
+  const REPERE_RETIRE = ["2026-09-10", 2148614315];
+
+  function nettoyerReperes() {
+    const [jour, id] = REPERE_RETIRE;
+    if (reperes[jour] !== id) return;
+    delete reperes[jour];
+    const st = storageLocal();
+    if (st) st.set({ [REPERES_KEY]: reperes });
+  }
+
+  function jourCle(d) {
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+
+  function jourDate(cle) {
+    return new Date(cle + "T12:00:00");
+  }
+
+  function jourCourt(cle) {
+    return dateCourte(jourDate(cle).getTime());
+  }
+
+  function jourLong(cle) {
+    return jourDate(cle).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  }
+
+  function idAnnonce(row) {
+    if (!row) return 0;
+    const rx = /^articleRow(\d+)$/;
+    const el = rx.test(row.id) ? row : row.closest('[id^="articleRow"]') || row.querySelector('[id^="articleRow"]');
+    const m = el && el.id.match(rx);
+    return m ? Number(m[1]) : 0;
+  }
+
+  // Note le plus grand numéro vu aujourd'hui, s'il dépasse celui déjà connu.
+  function noterRepere(maxId) {
+    const jour = jourCle(new Date());
+    if (!(maxId > (reperes[jour] || 0))) return;
+    reperes[jour] = maxId;
+    const st = storageLocal();
+    if (st) st.set({ [REPERES_KEY]: reperes });
+  }
+
+  // Encadre la date de mise en vente : l'annonce existait au plus tard le premier jour où un
+  // numéro au moins aussi grand a été vu (borne sûre), et après le jour précédent, où tous
+  // étaient plus petits (borne approximative : on n'a vu qu'une partie des annonces ce jour-là).
+  // Renvoie null quand la seule information est « avant aujourd'hui », qui n'apprend rien.
+  function estimerDate(id) {
+    const jours = Object.keys(reperes).sort();
+    let max = 0;
+    for (let i = 0; i < jours.length; i++) {
+      max = Math.max(max, reperes[jours[i]]);
+      if (max < id) continue;
+      if (i === 0) {
+        if (jours[0] === jourCle(new Date())) return null;
+        return { court: `avant ${jourCourt(jours[0])}`, long: `Mise en vente avant le ${jourLong(jours[0])} (certain).` };
+      }
+      const a = jours[i - 1];
+      const b = jours[i];
+      const ecart = (jourDate(b) - jourDate(a)) / 86400000;
+      if (ecart <= 3) return { court: `≈ ${jourCourt(b)}`, long: `Mise en vente vers le ${jourLong(b)} (approximatif).` };
+      return {
+        court: `${jourCourt(a)}–${jourCourt(b)}`,
+        long: `Mise en vente au plus tard le ${jourLong(b)} (certain), probablement après le ${jourLong(a)}.`,
+      };
+    }
+    return null;
+  }
+
+  const MOTS_AGE = { recente: "récente", moyenne: "moyenne", ancienne: "ancienne" };
+
+  // Rappelée à chaque modification de la page : les pastilles ne sont réécrites que si leur
+  // contenu change, sinon l'écriture relancerait l'observateur en boucle.
+  function decorateAges() {
+    if (!settings.ageBadges || !isProductPage()) return;
+    const lignes = [];
+    for (const a of document.querySelectorAll(SELLER_LINK_SEL)) {
+      const id = idAnnonce(rowFor(a));
+      if (id) lignes.push({ a, id });
+    }
+    if (!lignes.length) return;
+
+    const ids = [...new Set(lignes.map((l) => l.id))].sort((x, y) => y - x);
+    noterRepere(ids[0]);
+    const n = ids.length;
+
+    for (const { a, id } of lignes) {
+      const rang = ids.indexOf(id); // 0 = la plus récente
+      let classe = "";
+      if (n >= 3) {
+        const f = rang / (n - 1);
+        classe = f < 1 / 3 ? "recente" : f > 2 / 3 ? "ancienne" : "moyenne";
+      }
+      const est = estimerDate(id);
+      const texte = est ? est.court : classe ? MOTS_AGE[classe] : "";
+      if (!texte) continue;
+
+      const titre = [
+        `Annonce n° ${id}${n > 1 ? ` : la ${rang + 1}${rang ? "e" : "re"} plus récente sur ${n} de la page` : ""}.`,
+        est ? est.long : "",
+        "Estimation tirée du numéro de l'annonce ; une annonce modifiée a peut-être reçu un nouveau numéro.",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      const ancre = a.parentElement && a.parentElement.closest(".seller-name") ? a.parentElement : a;
+      let badge = ancre.parentElement && ancre.parentElement.querySelector(":scope > .cmx-age");
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "cmx-age";
+        ancre.insertAdjacentElement("afterend", badge);
+      }
+      if (badge.textContent !== texte) badge.textContent = texte;
+      if (badge.dataset.age !== (classe || "inconnu")) badge.dataset.age = classe || "inconnu";
+      if (badge.title !== titre) badge.title = titre;
+    }
+  }
+
   function decorateProfilePage() {
     const seller = sellerFromProfilePath();
     if (!seller) return;
@@ -717,7 +1020,10 @@
 
     // Sur un formulaire de message : remplir.
     if (findMessageTextarea()) {
-      applyPhrase(intent.phrase || phrasePourVendeur(null).texte, { langue: intent.langue });
+      applyPhrase(intent.phrase || phrasePourVendeur(null).texte, {
+        langue: intent.langue,
+        demande: { seller: intent.seller, carte: intent.carte || null },
+      });
       clearIntent();
       return;
     }
@@ -757,9 +1063,10 @@
   // ---------------------------------------------------------------------------
   // Démarrage
   // ---------------------------------------------------------------------------
-  loadSettings().then(() => {
+  Promise.all([loadSettings(), chargerDemandes()]).then(() => {
     buildToolbar();
     decorateSellerRows();
+    decorateAges();
     decorateProfilePage();
     resumeIntent();
 
@@ -772,6 +1079,7 @@
       requestAnimationFrame(() => {
         scheduled = false;
         decorateSellerRows();
+        decorateAges();
         decorateProfilePage();
         if (getIntent() && findMessageTextarea()) resumeIntent();
       });

@@ -17,6 +17,26 @@ Extension Chrome / Edge / Brave (Manifest V3) qui ajoute des boutons rapides sur
   le profil du vendeur, suit le lien « Envoyer un message » et pré-remplit le texte.
   Si la colonne de droite est introuvable, le bouton se replie à côté du nom du vendeur.
 
+- **Suivi des demandes** : chaque demande est mémorisée par vendeur et par carte. Sur la fiche produit,
+  le bouton photo d'un vendeur déjà sollicité porte une pastille ✓, verte si le message est parti,
+  grise si le texte a seulement été inséré ; la date apparaît au survol. La page d'options liste
+  toutes les demandes, avec un lien vers le vendeur et la carte. Une demande est oubliée au bout de 90 jours.
+
+- **Ancienneté des annonces** : Cardmarket n'affiche pas la date de mise en vente, mais chaque annonce
+  porte un numéro attribué dans l'ordre de création (`id="articleRow2102771147"`). Une pastille à côté
+  du vendeur en tire deux informations :
+  - sa couleur situe l'annonce parmi les offres de la page : verte pour les plus récentes, grise au
+    milieu, orange pour les plus anciennes ;
+  - son texte donne une date estimée : « avant 02/10 » pour une annonce plus ancienne que le premier
+    repère, « 05/10–12/10 » ou « ≈ 12/10 » pour une plus récente. Tant qu'aucun jour passé n'est connu
+    (le jour de l'installation), il affiche seulement le rang en toutes lettres (« récente », « ancienne »).
+  Les repères se constituent tout seuls : chaque jour, l'extension note le plus grand numéro vu. Plus tu
+  navigues, plus les dates sont précises.
+  Fiabilité : la date la plus récente d'un intervalle est sûre (l'annonce existait ce jour-là) ; la plus
+  ancienne est approximative, car l'extension ne voit qu'une partie des annonces chaque jour. Le classement
+  entre annonces est plus fiable que les dates. Une annonce modifiée a peut-être reçu un nouveau numéro,
+  la date serait alors celle de la modification.
+
 Par défaut, le message est **inséré mais pas envoyé** : tu relis et tu cliques sur Envoyer.
 L'envoi automatique peut être activé dans les options (à utiliser avec prudence).
 
@@ -43,7 +63,8 @@ Clique sur l'icône de l'extension (ou clic droit → Options) pour :
 
 - modifier la phrase envoyée au vendeur ;
 - afficher ou masquer les boutons 📷 à côté des vendeurs ;
-- activer l'envoi automatique sans relecture.
+- activer l'envoi automatique sans relecture ;
+- consulter l'historique des demandes de photos, en retirer une ou tout effacer.
 
 ## Fonctionnement du bouton photos
 

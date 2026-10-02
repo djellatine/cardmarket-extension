@@ -43,6 +43,18 @@
     }
     button:hover { background: #2a80f5; }
     #status { margin-left: 12px; color: #1a8f4a; font-weight: 600; }
+    h2 { font-size: 18px; margin: 40px 0 4px; padding-top: 24px; border-top: 1px solid #e3e6ec; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+    th { text-align: left; color: #666; font-weight: 600; font-size: 13px; padding: 6px 8px; border-bottom: 1px solid #e3e6ec; }
+    td { padding: 7px 8px; border-bottom: 1px solid #f0f2f5; vertical-align: top; }
+    td a { color: #1d6fe0; text-decoration: none; }
+    td a:hover { text-decoration: underline; }
+    .etat-envoye { color: #1a8f4a; font-weight: 600; }
+    .etat-insere { color: #7a8599; }
+    button.secondaire { background: #eef1f6; color: #1a1d24; }
+    button.secondaire:hover { background: #e0e4ec; }
+    button.suppr { margin: 0; padding: 2px 8px; background: none; color: #999; font-size: 16px; }
+    button.suppr:hover { background: #f3e3e3; color: #c0392b; }
     .warn { background: #fff6e0; border: 1px solid #f2d48a; border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: 14px; }
   </style>
 </head>
@@ -70,6 +82,15 @@
   </label>
 
   <label class="check">
+    <input type="checkbox" id="ageBadges">
+    <span>Afficher l'ancienneté de chaque annonce
+      <small>Pastille à côté du vendeur : verte si l'annonce est parmi les plus récentes de la page,
+        orange parmi les plus anciennes. Elle affiche une date estimée quand l'extension a assez de
+        repères, collectés au fil de tes visites. Le détail apparaît au survol.</small>
+    </span>
+  </label>
+
+  <label class="check">
     <input type="checkbox" id="autoSend">
     <span>Envoyer le message automatiquement, sans relecture
       <small>Désactivé par défaut : le texte est inséré et tu cliques toi-même sur Envoyer.</small>
@@ -80,6 +101,17 @@
   </div>
 
   <button id="save">Enregistrer</button><span id="status"></span>
+
+  <h2>Demandes de photos</h2>
+  <p class="hint">Les vendeurs déjà sollicités, carte par carte. Sur la fiche produit, leur bouton photo
+    porte une pastille ✓ : verte si le message est parti, grise si le texte a seulement été inséré.
+    Une demande est oubliée au bout de 90 jours.</p>
+  <p id="demandesVide" class="hint">Aucune demande pour l'instant.</p>
+  <table id="demandes" hidden>
+    <thead><tr><th>Date</th><th>Vendeur</th><th>Carte</th><th>État</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <button id="toutEffacer" class="secondaire" hidden>Tout effacer</button>
 
   <script src="options.js"></script>
 </body>
